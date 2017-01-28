@@ -140,44 +140,46 @@ public:
    }
 
    void write_lock() {
-     // Atomically sets _writer_waiting
-     // Wait until no readers nor writers are present
-     
-     rw_fields current, updated;
-     current._value = __atomic_load_n( &_fields._value, __ATOMIC_RELAXED );
-     
-     // Set _writer_waiting. Omit step if already set (is this correct?)
-     bool stable = current._writer_waiting;
-     while(!stable) {
-       updated = current;
-       updated._writer_waiting = true;
-       stable = __atomic_compare_exchange_n (
-         &_fields._value,/* destination    */
-         &current._value,/* expected value */
-         updated._value, /* desired value  */
-         true/*weak version, more efficient than strong if in loop*/,
-         __ATOMIC_RELAXED,  /*success memorder*/
-         __ATOMIC_RELAXED); /*failure memorder*/
-     }
+      // Atomically sets _writer_waiting
+      // Wait until no readers nor writers are present
 
-     // Wait until no readers nor writers present.
-     bool success = false;
-     while(!success) {
-       // We expect that no writers nor reads are present.
-       // If there are, the CAS atomic operation will fail.
-       current._writer_waiting  = false;
-       current._readers_present = 0;
-       updated = current;
-       updated._writer_waiting = true;
-       
-       success = __atomic_compare_exchange_n (
-         &_fields._value,/* destination    */
-         &current._value,/* expected value */
-         updated._value, /* desired value  */
-         true/*weak version, more efficient than strong if in loop*/,
-         __ATOMIC_ACQUIRE, /*success memorder*/
-         __ATOMIC_RELAXED);/*failure memorder*/
-     }
+      rw_fields current, updated;
+      current._value = __atomic_load_n( &_fields._value, __ATOMIC_RELAXED );
+
+      bool success = false;
+      do {
+         // Set _writer_waiting. Skip if already set.
+         bool stable = current._writer_waiting;
+         while(!stable) {
+            updated = current;
+            updated._writer_waiting = true;
+            stable = __atomic_compare_exchange_n (
+                  &_fields._value,/* destination    */
+                  &current._value,/* expected value */
+                  updated._value, /* desired value  */
+                  true/*weak version, more efficient than strong if in loop*/,
+                  __ATOMIC_RELAXED,  /*success memorder*/
+                  __ATOMIC_RELAXED); /*failure memorder*/
+         }
+
+         // Wait until no readers nor writers present.
+         // We expect that no writers nor reads are present.
+         // If there are, the CAS atomic operation will fail.
+         // If lock is acquired, _writer_waiting is also unset
+         current._writer_present  = false;
+         current._readers_present = 0;
+         updated = current;
+         updated._writer_waiting = false;
+         updated._writer_present = true;
+
+         success = __atomic_compare_exchange_n (
+               &_fields._value,/* destination    */
+               &current._value,/* expected value */
+               updated._value, /* desired value  */
+               true/*weak version, more efficient than strong if in loop*/,
+               __ATOMIC_ACQUIRE, /*success memorder*/
+               __ATOMIC_RELAXED);/*failure memorder*/
+      } while(!success);
    }
   
    void write_try_lock() {
