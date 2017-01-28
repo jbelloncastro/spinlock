@@ -35,7 +35,7 @@ public:
 
    void lock() {
       while( !try_lock() )
-         __asm__("pause" :: "memory");
+         __asm__("pause" ::: "memory");
    }
 
    void unlock() {
