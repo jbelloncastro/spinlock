@@ -110,12 +110,12 @@ public:
       if( !acquired ) {
          // We cannot lock the mutex right now. Rollback.
          rw_fields updated;
-	 updated._value = __atomic_fetch_sub(
+         updated._value = __atomic_fetch_sub(
                &_fields._value, /* use value instead of the union            */
                1U<<2,           /* rollback (sub 1) _readers_present counter */
                __ATOMIC_RELAXED ); /* don't produce a memory fence right now */
 
-	 // Now a regular read lock follows
+         // Now a regular read lock follows
          while(!acquired) {
             // We expect that no writers are neither present
             // nor waiting. If there are, the CAS atomic operation
