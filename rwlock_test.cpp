@@ -34,21 +34,19 @@ int main() {
       // Access elements of the vector
       // Size is updated, because insertions are performed
       // concurrently.
-      for( int i = 0; i < 10000; ++i ) {
+      for( int i = 0; i < 800000; ++i ) {
          std::lock_guard<reader_adaptor> guard(read_mutex);
          sum += shared[i%shared.size()];
-	 usleep(20);
       }
    };
 
    unsigned writers = 0;
-   unsigned insertions_each = 1000;
+   unsigned insertions_each = 25;
    auto write_operations = [&]() {
       // Insert new elements to the vector
       for( int i = 0; i < insertions_each; ++i ) {
          std::lock_guard<writer_adaptor> guard(write_mutex);
          shared.push_back(i);
-	 usleep(20);
       }
    };
 

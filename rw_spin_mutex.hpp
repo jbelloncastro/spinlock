@@ -95,6 +95,49 @@ public:
          __ATOMIC_RELAXED);/*failure memorder*/
      }
    }
+
+   void speculative_read_lock() {
+      // Speculatively assumes that no writers are present or waiting.
+      // Increases the number of present readers. Afterwards, if writers are
+      // detected, rollback and wait until they are finished.
+      rw_fields current;
+      current._value = __atomic_fetch_add(
+            &_fields._value, /* use value instead of the union            */
+            1U<<2,           /* we add 1 to _readers_present counter      */
+            __ATOMIC_RELAXED ); /* don't produce a memory fence right now */
+
+      bool acquired = !(current._writer_waiting | current._writer_present);
+      if( !acquired ) {
+         // We cannot lock the mutex right now. Rollback.
+         rw_fields updated;
+	 updated._value = __atomic_fetch_sub(
+               &_fields._value, /* use value instead of the union            */
+               1U<<2,           /* rollback (sub 1) _readers_present counter */
+               __ATOMIC_RELAXED ); /* don't produce a memory fence right now */
+
+	 // Now a regular read lock follows
+         while(!acquired) {
+            // We expect that no writers are neither present
+            // nor waiting. If there are, the CAS atomic operation
+            // will fail.
+            current._writer_waiting  = false;
+            current._writer_present  = false;
+            updated = current;
+            updated._readers_present++;
+
+            acquired = __atomic_compare_exchange_n (
+                  &_fields._value,/* destination    */
+                  &current._value,/* expected value */
+                  updated._value, /* desired value  */
+                  true/*weak version, more efficient than strong if in loop*/,
+                  __ATOMIC_ACQUIRE, /*success memorder*/
+                  __ATOMIC_RELAXED);/*failure memorder*/
+         }
+      } else {
+         // Prediction hit. Now we issue the barrier.
+         __atomic_thread_fence (__ATOMIC_ACQUIRE);
+      }
+   }
   
    void read_try_lock() {
      // Check no writers are present or waiting
