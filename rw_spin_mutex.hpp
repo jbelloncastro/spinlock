@@ -51,22 +51,11 @@ public:
    rw_spin_mutex( const rw_spin_mutex& ) = delete;
 
    void read_unlock() {
-     // Decrement _readers_present counter value
-     rw_fields current, updated;
-     current._value = __atomic_load_n( &_fields._value, __ATOMIC_RELAXED );
-     
-     bool stable = false;
-     while(!stable) {
-       updated = current;
-       updated._readers_present--;
-       stable = __atomic_compare_exchange_n (
-         &_fields._value,/* destination    */
-         &current._value,/* expected value */
-         updated._value, /* desired value  */
-         true/*weak version, more efficient than strong if in loop*/,
-         __ATOMIC_RELEASE,  /*success memorder*/
-         __ATOMIC_RELAXED); /*failure memorder*/
-     }
+      // Decrement _readers_present counter value
+      __atomic_fetch_sub(
+            &_fields._value, /* use value instead of the union     */
+            1U<<2,           /* decrement _readers_present counter */
+            __ATOMIC_RELEASE ); /* memorder                        */
    }
 
    void read_lock() {
