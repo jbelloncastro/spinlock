@@ -154,44 +154,28 @@ public:
 
    void write_unlock() {
      // Unset _writer_present
-     rw_fields current, updated;
-     current._value = __atomic_load_n( &_fields._value, __ATOMIC_RELAXED );
-     
-     bool stable = false;
-     while(!stable) {
-       updated = current;
-       updated._writer_present = false;
-       stable = __atomic_compare_exchange_n (
-         &_fields._value,/* destination    */
-         &current._value,/* expected value */
-         updated._value, /* desired value  */
-         true/*weak version, more efficient than strong if in loop*/,
-         __ATOMIC_RELEASE,  /*success memorder*/
-         __ATOMIC_RELAXED); /*failure memorder*/
-     }
+     // Generate mask with all bits set except _writer_present flag
+     // (the one we want to unset).
+     rw_fields updated;
+     updated._value = ~0U;
+     updated._writer_present = 0;
+     __atomic_fetch_and( &_fields._value, updated._value, __ATOMIC_RELEASE );
    }
 
    void write_lock() {
       // Atomically sets _writer_waiting
       // Wait until no readers nor writers are present
-
       rw_fields current, updated;
-      current._value = __atomic_load_n( &_fields._value, __ATOMIC_RELAXED );
 
       bool success = false;
       do {
          // Set _writer_waiting. Skip if already set.
-         bool stable = current._writer_waiting;
-         while(!stable) {
-            updated = current;
-            updated._writer_waiting = true;
-            stable = __atomic_compare_exchange_n (
-                  &_fields._value,/* destination    */
-                  &current._value,/* expected value */
-                  updated._value, /* desired value  */
-                  true/*weak version, more efficient than strong if in loop*/,
-                  __ATOMIC_RELAXED,  /*success memorder*/
-                  __ATOMIC_RELAXED); /*failure memorder*/
+         if( !current._writer_waiting ) {
+            // Generate mask with all bits unset except _writer_waiting flag
+            // (the one we want to set).
+            current._value = 0;
+            current._writer_waiting = 1;
+            current._value = __atomic_or_fetch( &_fields._value, current._value, __ATOMIC_RELAXED );
          }
 
          // Wait until no readers nor writers present.
