@@ -128,7 +128,7 @@ public:
       }
    }
   
-   void read_try_lock() {
+   bool read_try_lock() {
      // Check no writers are present or waiting
      // If none, lock is acquired and _readers_present counter is increased
 
@@ -150,6 +150,8 @@ public:
        false/*strong version, better when loop is not necessary*/,
        __ATOMIC_ACQUIRE/*success memorder*/,
        __ATOMIC_RELAXED/*failure memorder*/ );
+
+     return success;
    }
 
    void write_unlock() {
@@ -198,7 +200,7 @@ public:
       } while(!success);
    }
   
-   void write_try_lock() {
+   bool write_try_lock() {
      // Check no readers or writers are neither present nor waiting.
      // If none, lock is acquired and _writer_present counter is set.
 
@@ -220,6 +222,8 @@ public:
        false/*strong version, better when loop is not necessary*/,
        __ATOMIC_ACQUIRE/*success memorder*/,
        __ATOMIC_RELAXED/*failure memorder*/ );
+
+     return success;
    }
   
 private:
@@ -256,8 +260,8 @@ public:
       _mutex.read_lock();
    }
 
-   void try_lock() {
-      _mutex.read_try_lock();
+   bool try_lock() {
+      return _mutex.read_try_lock();
    }
 
    void unlock() {
@@ -282,8 +286,8 @@ public:
       _mutex.write_lock();
    }
 
-   void try_lock() {
-      _mutex.write_try_lock();
+   bool try_lock() {
+      return _mutex.write_try_lock();
    }
 
    void unlock() {
